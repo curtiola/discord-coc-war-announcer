@@ -15,7 +15,7 @@ global.ClanStorage = nodePersist.create({
 })
 ClanStorage.initSync();
 
-module.exports = function parseCurrentWar(data) {
+module.exports = function parseCurrentWar(data, overrideConfig = {}) {
   if (!this.tag) {
     debug('no tag');
     return;
@@ -241,15 +241,66 @@ module.exports = function parseCurrentWar(data) {
         })
       })
     }
-    let reportFrom = this.WarData.lastReportedAttack
-    debug(util.inspect(attacks.slice(reportFrom), { depth: null, colors: true }))
-    attacks.slice(reportFrom).forEach(attack => {
+    let reportFrom = overrideConfig.viewAll ? 0 : this.WarData.lastReportedAttack;
+    if (attacks.length && overrideConfig.attackTag) {
+      // find attack
+      let attack = attacks.find((atk) => atk.attackerTag === overrideConfig.attackTag);
+      if (attack) {
+        getClanChannel(this.tag, channels => {
+          channels.forEach(channelId => {
+            discordAttackMessage(this.warId, this.WarData, this.tag, opponentTag, attack, channelId)
+          });
+        });
+      } else {
+        getClanChannel(this.tag, channels => {
+          channels.forEach((channelId) => {
+            discordMessage('There were no attacks found for this clasher ID', channelId);
+          })
+        })
+      }
+    } else if (attacks.length && overrideConfig.defenseTag) {
+      // find attack
+      let attack = attacks.find((atk) => atk.defenderTag === overrideConfig.attackTag);
+      if (attack) {
+        getClanChannel(this.tag, channels => {
+          channels.forEach(channelId => {
+            discordAttackMessage(this.warId, this.WarData, this.tag, opponentTag, attack, channelId)
+          });
+        });
+      } else {
+        getClanChannel(this.tag, channels => {
+          channels.forEach((channelId) => {
+            discordMessage('There were no defenses found for this clasher ID', channelId);
+          })
+        })
+      }
+    } else if (attacks && attacks.length && overrideConfig.orderId) {
+      // do only the one
+      let attack = attacks.find((atk) => atk.order === +overrideConfig.orderId);
+      if (attack) {
+        getClanChannel(this.tag, channels => {
+          channels.forEach(channelId => {
+            discordAttackMessage(this.warId, this.WarData, this.tag, opponentTag, attack, channelId)
+          });
+        });
+      } else {
+        getClanChannel(this.tag, channels => {
+          channels.forEach((channelId) => {
+            discordMessage('There were no attacks found for this order id. Please try again with one of the following: ' + attacks.map((atk) => atk.order).join(', '), channelId);
+          })
+        })
+      }
+    } else {
+      log("Report from", reportFrom);
+      debug(util.inspect(attacks.slice(reportFrom), { depth: null, colors: true }))
       getClanChannel(this.tag, channels => {
-        channels.forEach(channelId => {
-          discordAttackMessage(this.warId, this.WarData, this.tag, opponentTag, attack, channelId)
+        attacks.slice(reportFrom).forEach(attack => {
+          channels.forEach(channelId => {
+            discordAttackMessage(this.warId, this.WarData, this.tag, opponentTag, attack, channelId)
+          })
         })
       })
-    })
+    }
     if (!this.WarData.endStatsReported && data.state == 'warEnded') {
       this.WarData.endStatsReported = true
       ClanStorage.setItemSync(this.warId, this.WarData)

@@ -69,21 +69,21 @@ module.exports = class Clan {
     });
   }
 
-  fetchCurrentWar(apiQueue, done = () => {}) {
+  fetchCurrentWar(apiQueue, done = () => {}, overrideConfig = {}) {
     apiQueue.push({
       url: COC_API_BASE + '/clans/' + encodeURIComponent(this.getTag()) + '/currentwar',
       done: (data) => {
-        if (!data.error) parseCurrentWar.bind(this)(data);
+        if (!data.error) parseCurrentWar.bind(this)(data, overrideConfig);
         done();
       }
     });
   }
 
-  fetchCurrentLeague(apiQueue, done = () => {}) {
+  fetchCurrentLeague(apiQueue, done = () => {}, overrideConfig = {}) {
     apiQueue.push({
       url: `${COC_API_BASE}/clans/${encodeURIComponent(this.getTag())}/currentwar/leaguegroup`,
       done: (data) => {
-        if (!data.error) parseCurrentLeague.bind(this)(data, apiQueue);
+        if (!data.error) parseCurrentLeague.bind(this)(data, apiQueue, overrideConfig);
         done();
       }
     });

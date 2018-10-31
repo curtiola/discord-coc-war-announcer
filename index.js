@@ -3,7 +3,7 @@
 console.log('\x1Bc')
 
 const LOG = true
-const DEBUG = true
+const DEBUG = false
 
 
 global.cleanArray = actual => {
@@ -24,8 +24,9 @@ global.fixISO = str => {
   return str.substr(0,4) + "-" + str.substr(4,2) + "-" + str.substr(6,5) + ":" + str.substr(11,2) + ":" +  str.substr(13)
 }
 
-global.log = message => {
-  if (LOG) console.log((message) ? message : '')
+global.log = function log() {
+  const args = Array.from(arguments);
+  if (LOG) console.log.apply(null, args);
 }
 
 global.debug = function debug() {
@@ -33,6 +34,8 @@ global.debug = function debug() {
   args.unshift(chalk.yellow('DEBUG:'));
   if (DEBUG) console.log.apply(null, args);
 }
+
+global.updateInterval = new Map();
 
 const crypto = require('crypto')
 const util = require('util')
@@ -554,6 +557,13 @@ global.discordReportMessage = (warId, WarData, clanTag, message, channelId) => {
   })
 }
 
+
+global.discordMessage = (message, channelId) => {
+  getChannelById(channelId, discordChannel => {
+    if (discordChannel) discordChannel.send(message).then(debug).catch(log)
+  });
+}
+
 global.getAnnouncingChannels = () => {
   let channelIds = []
   AnnounceClans.forEach(clan => {
@@ -780,9 +790,16 @@ let discordReady = () => {
       clan.channels.forEach(id => {
         newClan.addChannel(id)
       })
-      newClan.fetchCurrentWar(apiQueue)
-      newClan.fetchCurrentLeague(apiQueue)
-      Clans[newClan.getTag()] = newClan
+      newClan.fetchCurrentWar(apiQueue);
+      newClan.fetchCurrentLeague(apiQueue);
+      if (updateInterval.has(newClan.tag)) {
+        clearInterval(updateInterval.get(newClan.tag));
+      }
+      updateInterval.set(newClan.tag, setInterval(function(newClan) {
+        newClan.fetchCurrentWar(apiQueue);
+        newClan.fetchCurrentLeague(apiQueue);
+      }, 1000 * config.updateInterval, newClan));
+      Clans[newClan.getTag()] = newClan;
     } catch (err) {
       if (err === 'missingTag') {
         console.log('Attempted to create a Clan() with no tag.')
@@ -820,8 +837,10 @@ DiscordClient.on('message', message => {
       message.channel.send({embed}).then(debug).catch(log)
     } else if (splitMessage[0].toLowerCase() === prefix + 'help') {
       let helpMessage = '1. `' + prefix + 'announce #CLANTAG` Assign a clan to announce in a channel.\n'
+      // helpMessage += '- `' + prefix + 'udpate #CLANTAG` update war announcements in a channel.\n'
       helpMessage += '2. `' + prefix + 'unannounce #CLANTAG` Stop a clan from announcing in a channel.\n'
       helpMessage += '3. `' + prefix + 'warstats #CLANTAG` Display war stats for a clan that is tracked by The Announcer. If not provided with a clan tag it will display war stats for all clans assigned to the channel the command was run in.\n'
+      helpMessage += '   - `' + prefix + 'fullwarstats #CLANTAG` Display war states for clan that is tracked by The Announcer. Also provide reviews of ALL previous attacks this war.\n'
       helpMessage += '4. `' + prefix + 'hitrate #CLANTAG` Display hit rate stats for a clan that is tracked by The Announcer. If not provided with a clan tag it will display hit rate stats for all clans assigned to the channel the command was run in.\n'
       helpMessage += '5. `' + prefix + 'playerstats #PLAYERTAG` Display player stats for any player tag provided.\n'
       helpMessage += '6. `' + prefix + 'style [1-9](+)` Choose a style to use for war attacks in this channel. Requires a number to select style type, optionally append a `+` if you want war stats included in every message.\n'
@@ -839,8 +858,13 @@ DiscordClient.on('message', message => {
             if (!Clans[clanTag]) {
               let newClan = new Clan(clanTag)
               newClan.addChannel(message.channel.id)
-              newClan.fetchCurrentLeague(apiQueue)
-              newClan.fetchCurrentWar(apiQueue)
+              if (updateInterval.has(newClan.tag)) {
+                clearInterval(updateInterval.get(newClan.tag));
+              }
+              updateInterval.set(newClan.tag, setInterval(function(newClan) {
+                newClan.fetchCurrentWar(apiQueue);
+                newClan.fetchCurrentLeague(apiQueue);
+              }, 1000 * config.updateInterval, newClan));
               Clans[newClan.getTag()] = newClan
             } else {
               Clans[clanTag].addChannel(message.channel.id)
@@ -873,11 +897,61 @@ DiscordClient.on('message', message => {
       } else {
         message.channel.send('Someone with the permissions to manage channels needs to run that command.').then(debug).catch(log)
       }
+    } else if (splitMessage[0].toLowerCase() === prefix + 'update') {
+      if (message.member.hasPermission('MANAGE_CHANNELS')) {
+        if (splitMessage[1]) {
+          let clanTag = splitMessage[1].toUpperCase().replace(/O/g, '0')
+          if (clanTag.match(/^#[0289PYLQGRJCUV]+$/)) {
+            let newClan = new Clan(clanTag)
+            if (!Clans[clanTag]) {
+              newClan.addChannel(message.channel.id)
+              if (updateInterval.has(newClan.tag)) {
+                clearInterval(updateInterval.get(newClan.tag));
+              }
+              updateInterval.set(newClan.tag, setInterval(function(newClan) {
+                newClan.fetchCurrentWar(apiQueue);
+                newClan.fetchCurrentLeague(apiQueue);
+              }, 1000 * config.updateInterval, newClan));
+              Clans[newClan.getTag()] = newClan
+            } else {
+              Clans[clanTag].addChannel(message.channel.id)
+            }
+            let announcingIndex = announcingClan(clanTag)
+            if (typeof announcingIndex === 'undefined') {
+              AnnounceClans.push({
+                tag: clanTag,
+                channels: [
+                  channelId
+                ]
+              })
+              message.channel.send('War announcements for ' + clanTag + ' registered in this channel.').then(debug).catch(log)
+            }
+            AnnounceClans = cleanArray(AnnounceClans)
+            Storage.setItemSync('AnnounceClans', AnnounceClans)
+            Clans[newClan.getTag()].fetchCurrentWar(apiQueue);
+            Clans[newClan.getTag()].fetchCurrentLeague(apiQueue);
+          } else {
+            message.channel.send('Please provide a valid clan tag to announce. Valid tag characters are: \n```\n0289PYLQGRJCUV\n```').then(debug).catch(log)
+          }
+        } else {
+          getChannelClan(channelId, clanTag => {
+            debug(Clan[clanTag])
+            Clans[clanTag].fetchCurrentLeague(apiQueue, () =>  {}, false)
+            Clans[clanTag].fetchCurrentWar(apiQueue, () =>  {}, false)
+          })
+          message.channel.send('Updating clan attack stats').then(debug).catch(log)
+        }
+      } else {
+        message.channel.send('Someone with the permissions to manage channels needs to run that command.').then(debug).catch(log)
+      }
     } else if (splitMessage[0].toLowerCase() === prefix + 'unannounce') {
       if (message.member.hasPermission('MANAGE_CHANNELS')) {
         if (splitMessage[1]) {
           let clanTag = splitMessage[1].toUpperCase().replace(/O/g, '0')
           let announcingIndex = announcingClan(clanTag)
+          if (updateInterval.has(newClan.tag)) {
+            clearInterval(updateInterval.get(newClan.tag));
+          }
           if (typeof announcingIndex !== 'undefined') {
             let channelIndex = AnnounceClans[announcingIndex].channels.indexOf(channelId)
             if (channelIndex > -1) {
@@ -946,6 +1020,87 @@ DiscordClient.on('message', message => {
             message.channel.send('War data is missing try again in a little bit. I might still be fetching the data.').then(debug).catch(log)
           }
         })
+      }
+    }  else if (splitMessage[0].toLowerCase() === prefix + 'fullwarstats') {
+      if (splitMessage[1]) {
+        let clanTag = splitMessage[1].toUpperCase().replace(/O/g, '0')
+        if (Clans[clanTag]) {
+          let WarData = Clans[clanTag].getWarData()
+          let AnnouncingClan = AnnounceClans[announcingClan(clanTag)]
+          if (WarData) {
+            discordStatsMessage(WarData, channelId)
+            Clans[clanTag].fetchCurrentLeague(apiQueue, () =>  {}, {viewAll: true})
+            Clans[clanTag].fetchCurrentWar(apiQueue, () =>  {}, {viewAll: true})
+          } else if (AnnouncingClan.state === 'notInWar') {
+            message.channel.send(clanTag + ' is not currently in war.').then(debug).catch(log)
+          } else if (AnnouncingClan.reason === 'accessDenied') {
+            message.channel.send(clanTag + '\'s war log is not public.').then(debug).catch(log)
+          } else {
+            message.channel.send('War data is missing try again in a little bit. I might still be fetching the data.').then(debug).catch(log)
+          }
+        } else {
+          message.channel.send('I don\'t appear to have any war data for that clan.').then(debug).catch(log)
+        }
+      } else {
+        getChannelClan(channelId, clanTag => {
+          let WarData = Clans[clanTag].getWarData()
+          let AnnouncingClan = AnnounceClans[announcingClan(clanTag)]
+          if (WarData) {
+            discordStatsMessage(WarData, channelId)
+            Clans[clanTag].fetchCurrentLeague(apiQueue, () =>  {}, {viewAll: true})
+            Clans[clanTag].fetchCurrentWar(apiQueue, () =>  {}, {viewAll: true})
+          } else if (AnnouncingClan.state === 'notInWar') {
+            message.channel.send(clanTag + ' is not currently in war.').then(debug).catch(log)
+          } else if (AnnouncingClan.reason === 'accessDenied') {
+            message.channel.send(clanTag + '\'s war log is not public.').then(debug).catch(log)
+          } else {
+            message.channel.send('War data is missing try again in a little bit. I might still be fetching the data.').then(debug).catch(log)
+          }
+        })
+      }
+    }  else if (splitMessage[0].toLowerCase() === prefix + 'attackstats') {
+      if (splitMessage[1]) {
+        let identifier = splitMessage[1];
+        getChannelClan(channelId, clanTag => {
+          log(identifier)
+          if (identifier.length > 2 && identifier.match(/^([AD]?)#[0289PYLQGRJCUV]+$/)) {
+            // we have a user tag... do something with it 
+            let attack = identifier.toLowerCase().startsWith('a');
+            let key = 'attackTag'
+            if (!attack) {
+              key = 'defenseTag'
+            }
+            Clans[clanTag].fetchCurrentLeague(apiQueue, () =>  {}, {[key]: identifier.substring(1)})
+            Clans[clanTag].fetchCurrentWar(apiQueue, () =>  {}, {[key]: identifier.substring(1)})
+          } else if (identifier.length <= 2) {
+            // we have an order ID user that...
+            Clans[clanTag].fetchCurrentLeague(apiQueue, () =>  {}, {orderId: identifier})
+            Clans[clanTag].fetchCurrentWar(apiQueue, () =>  {}, {orderId: identifier})
+          } else {
+            message.channel.send('There was an error retrieving attack stats');
+          }
+        });
+      } else if (splitMessage[1] && splitMessage[2]) {
+        let clanTag = splitMessage[1].toUpperCase().replace(/O/g, '0')
+        if (Clans[clanTag]) {
+          let WarData = Clans[clanTag].getWarData()
+          let AnnouncingClan = AnnounceClans[announcingClan(clanTag)]
+          if (WarData) {
+            discordStatsMessage(WarData, channelId)
+            Clans[clanTag].fetchCurrentLeague(apiQueue, () =>  {}, {viewAll: true})
+            Clans[clanTag].fetchCurrentWar(apiQueue, () =>  {}, {viewAll: true})
+          } else if (AnnouncingClan.state === 'notInWar') {
+            message.channel.send(clanTag + ' is not currently in war.').then(debug).catch(log)
+          } else if (AnnouncingClan.reason === 'accessDenied') {
+            message.channel.send(clanTag + '\'s war log is not public.').then(debug).catch(log)
+          } else {
+            message.channel.send('War data is missing try again in a little bit. I might still be fetching the data.').then(debug).catch(log)
+          }
+        } else {
+          message.channel.send('I don\'t appear to have any war data for that clan.').then(debug).catch(log)
+        }
+      } else {
+        message.channel.send('I don\'t appear to have the necessary data to retrieve that war attack. Please provide an order number or tag (ie. 1-20, A#RJ23LMR, D#RJ23LMR) ')
       }
     } else if (splitMessage[0].toLowerCase() === prefix + 'hitrate') {
       if (splitMessage[1]) {
