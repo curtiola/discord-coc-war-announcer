@@ -28,8 +28,10 @@ global.log = message => {
   if (LOG) console.log((message) ? message : '')
 }
 
-global.debug = message => {
-  if (DEBUG) console.log(chalk.yellow('DEBUG:'), message)
+global.debug = function debug() {
+  const args = Array.from(arguments);
+  args.unshift(chalk.yellow('DEBUG:'));
+  if (DEBUG) console.log.apply(null, args);
 }
 
 const crypto = require('crypto')
@@ -169,7 +171,7 @@ global.announcingClan = (clanTag) => {
   let count = 0
   let match
   AnnounceClans.forEach(clan => {
-    if (clan.tag === clanTag.toUpperCase().replace(/O/g, '0')) {
+    if (!!clanTag && clan.tag === clanTag.toUpperCase().replace(/O/g, '0')) {
       match = count
     }
     count++
@@ -179,8 +181,10 @@ global.announcingClan = (clanTag) => {
 
 global.getClanChannel = (clanTag, done) => {
   AnnounceClans.forEach(clan => {
-    if (clan.tag === clanTag.toUpperCase().replace(/O/g, '0')) {
+    if (!!clanTag && clan.tag === clanTag.toUpperCase().replace(/O/g, '0')) {
       done(clan.channels)
+    } else {
+      done([]);
     }
   })
 }
@@ -775,7 +779,7 @@ let discordReady = () => {
         newClan.addChannel(id)
       })
       newClan.fetchCurrentWar(apiQueue)
-      newClan.fetchCurrentLeague(apiQueue, done)
+      newClan.fetchCurrentLeague(apiQueue)
       Clans[newClan.getTag()] = newClan
     } catch (err) {
       if (err === 'missingTag') {
