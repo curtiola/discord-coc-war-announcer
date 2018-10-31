@@ -3,7 +3,8 @@
 console.log('\x1Bc')
 
 const LOG = true
-const DEBUG = false
+const DEBUG = true
+
 
 global.cleanArray = actual => {
   if (actual && actual.constructor === Array) {
@@ -51,7 +52,7 @@ console.log(chalk.cyan('-'.repeat(17)))
 
 global.config = require('./config')
 log(chalk.bold('Server Permission URL:'))
-log(chalk.magenta.bold('https://discordapp.com/oauth2/authorize?client_id=' + config.discord.clientId + '&scope=bot&permissions=134208\n'))
+log(chalk.magenta.bold('https://discordapp.com/oauth2/authorize?client_id=' + config.discord.clientId + '&permissions=261184&scope=bot\n'))
 
 const DiscordClient = new Discord.Client()
 
