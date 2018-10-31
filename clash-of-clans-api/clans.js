@@ -325,11 +325,24 @@ module.exports = class Clan {
     }
   }
 
+  parseCurrentLeague(data) {
+    debug(data);
+  }
+
   fetchCurrentWar(apiQueue, done = () => {}) {
     apiQueue.push({
       url: COC_API_BASE + '/clans/' + encodeURIComponent(this.tag) + '/currentwar',
       done: (data) => {
         if (!data.error) this.parseCurrentWar(data)
+        done()
+      }
+    })
+  }
+  fetchCurrentLeague(apiQueue, done = () => {}) {
+    apiQueue.push({
+      url: `${COC_API_BASE}/clans/${encodeURIComponent(this.tag)}/currentwar/leaguegroup`,
+      done: (data) => {
+        if (!data.error) this.parseCurrentLeague(data)
         done()
       }
     })

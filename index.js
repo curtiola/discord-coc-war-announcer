@@ -774,7 +774,8 @@ let discordReady = () => {
       clan.channels.forEach(id => {
         newClan.addChannel(id)
       })
-      newClan.fetchCurrentWar(apiQueue, done)
+      newClan.fetchCurrentWar(apiQueue)
+      newClan.fetchCurrentLeague(apiQueue, done)
       Clans[newClan.getTag()] = newClan
     } catch (err) {
       if (err === 'missingTag') {
@@ -832,6 +833,7 @@ DiscordClient.on('message', message => {
             if (!Clans[clanTag]) {
               let newClan = new Clan(clanTag)
               newClan.addChannel(message.channel.id)
+              newClan.fetchCurrentLeague(apiQueue)
               newClan.fetchCurrentWar(apiQueue)
               Clans[newClan.getTag()] = newClan
             } else {
