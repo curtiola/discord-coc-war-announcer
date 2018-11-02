@@ -17,6 +17,7 @@ global.ClanStorage = nodePersist.create({
 ClanStorage.initSync();
 
 module.exports = function parseCurrentLeague(data, apiQueue, overrideConfig) {
+  if (!data || !data.rounds) return;
   data.rounds.forEach((round) => {
     round.warTags.forEach((war) => {
       this.fetchCurrentLeagueWar(apiQueue, war, (data) => {
