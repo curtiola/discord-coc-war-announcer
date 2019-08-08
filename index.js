@@ -5,7 +5,6 @@ console.log('\x1Bc')
 const LOG = true
 const DEBUG = false
 
-
 global.cleanArray = actual => {
   if (actual && actual.constructor === Array) {
     let j = 0
@@ -36,6 +35,7 @@ global.debug = function debug() {
 }
 
 global.updateInterval = new Map();
+
 
 const crypto = require('crypto')
 const util = require('util')
@@ -169,6 +169,14 @@ const StarColors = config.starColors
 
 global.Storage = nodePersist.create()
 Storage.initSync()
+
+global.ClanStorage = nodePersist.create({
+    dir: '.node-persist/clan-storage',
+    expiredInterval: 1000 * 60 * 60 * 24 * 9 // Cleanup Files older than a week + 2 days for prep / war day.
+})
+ClanStorage.initSync();
+
+var isCWL = ClanStorage.getItemSync('CWL')
 
 global.AnnounceClans = Storage.getItemSync('AnnounceClans')
 AnnounceClans = cleanArray(AnnounceClans)
@@ -520,20 +528,21 @@ global.discordMissingAttackMessage = (clanTag, channelId, PlayersMissingAtack) =
 
     PlayersMissingAtack.forEach(member => {
       const embed = new Discord.RichEmbed()
-      .setTitle(Clans[clanTag].name + ' vs ' + Clans[clanTag].opponent.name)
-      .setFooter(clanTag + ' vs ' + Clans[clanTag].opponent.tag)
-
-      if (!member.attacks) {
-        embed.addField(member.name + " is missing 2 attacks!!!", member.tag)
-          .setColor(0xFF484E)
+        if (!member.attacks) {
+                embed.setTitle(Clans[clanTag].name + ' vs ' + Clans[clanTag].opponent.name)
+                .setFooter(clanTag + ' vs ' + Clans[clanTag].opponent.tag)
+                .addField(member.name + " has not attacked!!!", member.tag)
+                .setColor(0xFF484E)
         } else {
-          if (member.attacks.length != 2) {
-            embed.addField(member.name + " is missing 1 attack!", member.tag)
-            .setColor(0xFFBC48)
+            if (isCWL != true && (member.attacks.length != 2)) {
+                    embed.setTitle(Clans[clanTag].name + ' vs ' + Clans[clanTag].opponent.name)
+                    .setFooter(clanTag + ' vs ' + Clans[clanTag].opponent.tag)
+                    .addField(member.name + " is missing 1 attack!", member.tag)
+                    .setColor(0xFFBC48)
+          }
         }
-      }
       getChannelById(channelId, discordChannel => {
-        if (discordChannel) discordChannel.send('@everyone',{ embed }).then(debug).catch(log)
+        if (discordChannel) discordChannel.send({ embed }).then(debug).catch(log)
       })
     })
 
@@ -556,7 +565,7 @@ global.discordReportMessage = (warId, WarData, clanTag, message, channelId) => {
 
   ClanStorage.setItemSync(warId, WarData)
   getChannelById(channelId, discordChannel => {
-    if (discordChannel) discordChannel.send({embed}).then(debug).catch(log)
+    if (discordChannel) discordChannel.send('@everyone',{embed}).then(debug).catch(log)
   })
 }
 
@@ -952,8 +961,8 @@ DiscordClient.on('message', message => {
         if (splitMessage[1]) {
           let clanTag = splitMessage[1].toUpperCase().replace(/O/g, '0')
           let announcingIndex = announcingClan(clanTag)
-          if (updateInterval.has(clan.tag)) {
-            clearInterval(updateInterval.get(clan.tag));
+            if (updateInterval.has(clanTag)) {
+                clearInterval(updateInterval.get(clanTag));
           }
           if (typeof announcingIndex !== 'undefined') {
             let channelIndex = AnnounceClans[announcingIndex].channels.indexOf(channelId)
