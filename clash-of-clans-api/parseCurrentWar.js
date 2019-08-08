@@ -45,20 +45,20 @@ module.exports = function parseCurrentWar(data, overrideConfig = {}) {
         debug('State: ' + data.state)
         debug(data, true)
 
-        let PlayersMissingAtack = []
+        let PlayersMissingAttack = []
         // ClanStorage.setItemSync(this.warId, this.WarData)
         let tmpAttacks = {}
         data.clan.members.forEach(member => {
             Players[member.tag] = member
             if (member.attacks) {
-                if (member.attacks.length != 2) {
-                    PlayersMissingAtack.push(member)
+                if (member.attacks.length != (overrideConfig.availableAttacks || 2)) {
+                    PlayersMissingAttack.push(member)
                 }
                 member.attacks.forEach(attack => {
                     tmpAttacks[attack.order] = Object.assign(attack, { who: 'clan' })
                 })
             } else {
-                PlayersMissingAtack.push(member)
+                PlayersMissingAttack.push(member)
             }
         })
         data.opponent.members.forEach(member => {
@@ -223,8 +223,8 @@ module.exports = function parseCurrentWar(data, overrideConfig = {}) {
                     let message = config.messages.lastHour
                     this.WarData.lastHourReported = true
                     discordReportMessage(this.warId, this.WarData, this.tag, message, channelId)
-                    if (PlayersMissingAtack.length > 0) {
-                        discordMissingAttackMessage(this.tag, channelId, PlayersMissingAtack)
+                    if (PlayersMissingAttack.length > 0) {
+                        discordMissingAttackMessage(this.tag, channelId, PlayersMissingAttack)
                     }
                 })
             })
@@ -235,8 +235,8 @@ module.exports = function parseCurrentWar(data, overrideConfig = {}) {
                     let message = config.messages.finalMinutes
                     this.WarData.finalMinutesReported = true
                     discordReportMessage(this.warId, this.WarData, this.tag, message, channelId)
-                    if (PlayersMissingAtack.length > 0) {
-                        discordMissingAttackMessage(this.tag, message, channelId, PlayersMissingAtack)
+                    if (PlayersMissingAttack.length > 0) {
+                        discordMissingAttackMessage(this.tag, message, channelId, PlayersMissingAttack)
                     }
                 })
             })
@@ -321,7 +321,7 @@ module.exports = function parseCurrentWar(data, overrideConfig = {}) {
         }
         else {
             if (data.state == 'notInWar' && (isCWL == true)) {
-                console.log(chalk.green.bold(this.tag.toUpperCase().replace(/O/g, '0') + ' Clan is currently in CWL war.'))
+                log(chalk.green.bold(this.tag.toUpperCase().replace(/O/g, '0') + ' Clan is currently in CWL war.'))
             }
         }
         if (data.reason == 'accessDenied' && !AnnounceClans[announcingIndex].notPublicReported) {
@@ -329,7 +329,11 @@ module.exports = function parseCurrentWar(data, overrideConfig = {}) {
             getClanChannel(this.tag, channels => {
                 channels.forEach(channelId => {
                     getChannelById(channelId, discordChannel => {
-                        if (discordChannel) discordChannel.send(this.tag + '\'s war log is not public.').then(debug).catch(log)
+                        if (discordChannel) discordChannel.send(this.tag + '\'s war log is not public.').then(debug).catch((data) => {
+                            log('warLogNotPublic: Send Embed Error')
+                            log(data)
+                            removeClanFromChannel(data.code, clanTag, channelId)
+                        })
                     })
                 })
             })
